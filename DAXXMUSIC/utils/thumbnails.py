@@ -1,22 +1,16 @@
 import os
 import re
-import random
-import aiohttp
-import asyncio
-import aiofiles
+import textwrap
 
+import aiofiles
+import aiohttp
 import numpy as np
 
-from config import BOT_NAME, YOUTUBE_IMG_URL
-from DAXXMUSIC import app
-
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from youtubesearchpython.__future__ import VideosSearch
-from PIL import (Image, ImageDraw, ImageEnhance, ImageFilter,
-                 ImageFont, ImageOps)
 
-
-def make_col():
-    return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+from config import YOUTUBE_IMG_URL
+from DAXXMUSIC import app
 
 
 def changeImageSize(maxWidth, maxHeight, image):
@@ -28,161 +22,288 @@ def changeImageSize(maxWidth, maxHeight, image):
     return newImage
 
 
-def truncate(text):
-    list = text.split(" ")
-    text1 = ""
-    text2 = ""
-    for i in list:
-        if len(text1) + len(i) < 30:
-            text1 += " " + i
-        elif len(text2) + len(i) < 30:
-            text2 += " " + i
-
-    text1 = text1.strip()
-    text2 = text2.strip()
-    return [text1, text2]
+def add_corners(im):
+    bigsize = (im.size[0] * 3, im.size[1] * 3)
+    mask = Image.new("L", bigsize, 0)
+    ImageDraw.Draw(mask).ellipse((0, 0) + bigsize, fill=255)
+    mask = mask.resize(im.size, Image.LANCZOS)
+    mask = ImageChops.darker(mask, im.split()[-1])
+    im.putalpha(mask)
 
 
 async def get_thumb(videoid, user_id):
-    if os.path.isfile(f"cache/{videoid}_{user_id}.jpg"):
-        return f"cache/{videoid}_{user_id}.jpg"
+    if os.path.isfile(f"cache/{videoid}_{user_id}.png"):
+        return f"cache/{videoid}_{user_id}.png"
+    url = f"https://www.youtube.com/watch?v={videoid}"
     try:
-        url = f"https://www.youtube.com/watch?v={videoid}"
-        if 1 == 1:
-            results = VideosSearch(url, limit=1)
-            for result in (await results.next())["result"]:
-                try:
-                    title = result["title"]
-                    title = re.sub("\W+", " ", title)
-                    title = title.title()
-                except:
-                    title = "Unsupported Title"
-                try:
-                    duration = result["duration"]
-                except:
-                    duration = "Unknown Mins"
-                thumbnail = result["thumbnails"][0]["url"].split("?")[0]
-                try:
-                    views = result["viewCount"]["short"]
-                except:
-                    views = "Unknown Views"
-                try:
-                    channel = result["channel"]["name"]
-                except:
-                    channel = "Unknown Channel"
+        results = VideosSearch(url, limit=1)
+        for result in (await results.next())["result"]:
+            try:
+                title = result["title"]
+                title = re.sub("\W+", " ", title)
+                title = title.title()
+            except:
+                title = "Unsupported Title"
+            try:
+                duration = result["duration"]
+            except:
+                duration = "Unknown"
+            thumbnail = result["thumbnails"][0]["url"].split("?")[0]
+            try:
+                views = result["viewCount"]["short"]
+            except:
+                views = "Unknown Views"
+            try:
+                channel = result["channel"]["name"]
+            except:
+                channel = "Unknown Channel"
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://img.youtube.com/vi/{videoid}/maxresdefault.jpg") as resp:
-                    if resp.status == 200:
-                        f = await aiofiles.open(
-                            f"cache/thumb{videoid}.jpg", mode="wb"
-                        )
-                        await f.write(await resp.read())
-                        await f.close()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(thumbnail) as resp:
+                if resp.status == 200:
+                    f = await aiofiles.open(f"cache/thumb{videoid}.png", mode="wb")
+                    await f.write(await resp.read())
+                    await f.close()
+
+        try:
             wxyz = await app.get_profile_photos(user_id)
-            try:
-                wxy = await app.download_media(wxyz[0]['file_id'], file_name=f'{user_id}.jpg')
-            except:
-                hehe = await app.get_profile_photos(app.id)
-                wxy = await app.download_media(hehe[0]['file_id'], file_name=f'{app.id}.jpg')
-            xy = Image.open(wxy)
+            wxy = await app.download_media(wxyz[0]['file_id'], file_name=f'{user_id}.jpg')
+        except:
+            hehe = await app.get_profile_photos(app.id)
+            wxy = await app.download_media(hehe[0]['file_id'], file_name=f'{app.id}.jpg')
+        xy = Image.open(wxy)
+        a = Image.new('L', [640, 640], 0)
+        b = ImageDraw.Draw(a)
+        b.pieslice([(0, 0), (640,640)], 0, 360, fill = 255, outline = "white")
+        c = np.array(xy)
+        d = np.array(a)
+        e = np.dstack((c, d))
+        f = Image.fromarray(e)
+        x = f.resize((200, 200))
 
-            a = Image.new('L', [640, 640], 0)
-            b = ImageDraw.Draw(a)
-            b.pieslice([(0, 0), (640, 640)], 0, 360, fill=255, outline="white")
-            c = np.array(xy)
-            d = np.array(a)
-            e = np.dstack((c, d))
-            f = Image.fromarray(e)
-            x = f.resize((170, 170))
+        youtube = Image.open(f"cache/thumb{videoid}.png")
+        bg = Image.open(f"DAXXMUSIC/assets/anonx.png")
+        image1 = changeImageSize(1280, 720, youtube)
+        image2 = image1.convert("RGBA")
+        background = image2.filter(filter=ImageFilter.BoxBlur(10))
+        enhancer = ImageEnhance.Brightness(background)
+        background = enhancer.enhance(0.6)
 
-            youtube = Image.open(f"cache/thumb{videoid}.jpg")
-            image1 = changeImageSize(1280, 720, youtube)
-            image2 = image1.convert("RGBA")
-            background = image2.filter(filter=ImageFilter.BoxBlur(30))
-            enhancer = ImageEnhance.Brightness(background)
-            background = enhancer.enhance(0.6)
-            image2 = background
+        image3 = changeImageSize(1280, 720, bg)
+        image5 = image3.convert("RGBA")
+        Image.alpha_composite(background, image5).save(f"cache/temp{videoid}.png")
 
-            circle = Image.open("DAXXMUSIC/assets/circle.png")
+        Xcenter = youtube.width / 2
+        Ycenter = youtube.height / 2
+        x1 = Xcenter - 250
+        y1 = Ycenter - 250
+        x2 = Xcenter + 250
+        y2 = Ycenter + 250
+        logo = youtube.crop((x1, y1, x2, y2))
+        logo.thumbnail((520, 520), Image.LANCZOS)
+        logo.save(f"cache/chop{videoid}.png")
+        if not os.path.isfile(f"cache/cropped{videoid}.png"):
+            im = Image.open(f"cache/chop{videoid}.png").convert("RGBA")
+            add_corners(im)
+            im.save(f"cache/cropped{videoid}.png")
 
-            im = circle
-            im = im.convert('RGBA')
-            color = make_col()
+        crop_img = Image.open(f"cache/cropped{videoid}.png")
+        logo = crop_img.convert("RGBA")
+        logo.thumbnail((1, 1), Image.LANCZOS)
+        width = int((1280 - 1) / 2)
+        background = Image.open(f"cache/temp{videoid}.png")
+        background.paste(logo, (width + 3, 290), mask=logo)
+        background.paste(x, (1050, 250), mask=x)
+        background.paste(image3, (0, 0), mask=image3)
 
-            data = np.array(im)
-            red, green, blue, alpha = data.T
-
-            white_areas = (red == 255) & (blue == 255) & (green == 255)
-            data[..., :-1][white_areas.T] = color
-
-            im2 = Image.fromarray(data)
-            circle = im2
-
-            image3 = image1.crop((280, 0, 1000, 720))
-            lum_img = Image.new('L', [720, 720], 0)
-            draw = ImageDraw.Draw(lum_img)
-            draw.pieslice([(0, 0), (720, 720)], 0, 360, fill=255, outline="white")
-            img_arr = np.array(image3)
-            lum_img_arr = np.array(lum_img)
-            final_img_arr = np.dstack((img_arr, lum_img_arr))
-            image3 = Image.fromarray(final_img_arr)
-            image3 = image3.resize((600, 600))
-
-            image2.paste(image3, (50, 70), mask=image3)
-            image2.paste(x, (470, 490), mask=x)
-            image2.paste(circle, (0, 0), mask=circle)
-
-            # fonts
-            font1 = ImageFont.truetype('DAXXMUSIC/assets/font.ttf', 30)
-            font2 = ImageFont.truetype('DAXXMUSIC/assets/font2.ttf', 70)
-            font3 = ImageFont.truetype('DAXXMUSIC/assets/font2.ttf', 40)
-            font4 = ImageFont.truetype('DAXXMUSIC/assets/font2.ttf', 35)
-
-            image4 = ImageDraw.Draw(image2)
-            image4.text((10, 10), BOT_NAME, fill="white", font=font1, align="left")
-            image4.text((670, 150), "NOW PLAYING", fill="white", font=font2, stroke_width=2, stroke_fill="white",
-                        align="left")
-
-            # title
-            title1 = truncate(title)
-            image4.text((670, 300), text=title1[0], fill="white", stroke_width=1, stroke_fill="white", font=font3,
-                        align="left")
-            image4.text((670, 350), text=title1[1], fill="white", stroke_width=1, stroke_fill="white", font=font3,
-                        align="left")
-
-            # description
-            views = f"Views : {views}"
-            duration = f"Duration : {duration} Mins"
-            channel = f"Channel : {channel}"
-
-            image4.text((670, 450), text=views, fill="white", font=font4, align="left")
-            image4.text((670, 500), text=duration, fill="white", font=font4, align="left")
-            image4.text((670, 550), text=channel, fill="white", font=font4, align="left")
-
-            image2 = ImageOps.expand(image2, border=20, fill=make_col())
-            image2 = image2.convert('RGB')
-            try:
-                os.remove(f"cache/thumb{videoid}.png")
-            except:
-                pass
-            image2.save(f"cache/{videoid}_{user_id}.jpg")
-            file = f"cache/{videoid}_{user_id}.jpg"
-            return file
+        draw = ImageDraw.Draw(background)
+        font = ImageFont.truetype("DAXXMUSIC/assets/font2.ttf", 37)
+        ImageFont.truetype("DAXXMUSIC/assets/font2.ttf", 62)
+        arial = ImageFont.truetype("DAXXMUSIC/assets/font2.ttf", 26)
+        ImageFont.truetype("DAXXMUSIC/assets/font.ttf", 26)
+        para = textwrap.wrap(title, width=28)
+        try:
+            draw.text(
+                (55, 560),
+            f"{channel} | {views[:23]}",
+            (255, 255, 255),
+            font=arial,
+            )
+            if para[0]:
+                text_w, text_h = draw.textsize(f"{para[0]}", font=font)
+                draw.text(
+                    ((1280 - 1115) / 3.50, 620),
+                    f"{para[0]} {para[1]}",
+                    fill="white",
+                    stroke_width=1,
+                    stroke_fill="white",
+                    font=font,
+                )
+            if para[1]:
+                text_w, text_h = draw.textsize(f"{para[1]}", font=font)
+                draw.text(
+                    ((1280 - text_w) / 2, 60000),
+                    f"{para[1]}",
+                    fill="white",
+                    stroke_width=1,
+                    stroke_fill="white",
+                    font=font,
+                )
+        except:
+            pass
+        text_w, text_h = draw.textsize(f"Duration: {duration} Mins", font=arial)
+        draw.text(
+            ((1280 - 190) / 1, 685),
+            f"             {duration} ",
+            fill="white",
+            font=arial,
+        )
+        try:
+            os.remove(f"cache/thumb{videoid}.png")
+        except:
+            pass
+        background.save(f"cache/{videoid}_{user_id}.png")
+        return f"cache/{videoid}_{user_id}.png"
     except Exception as e:
-        print(f"Error in get_thumb: {e}")
+        print(e)
         return YOUTUBE_IMG_URL
 
 
-import subprocess
-
-def get_available_formats(video_url):
+async def gen_qthumb(videoid, user_id):
+    if os.path.isfile(f"cache/que{videoid}_{user_id}.png"):
+        return f"cache/que{videoid}_{user_id}.png"
+    url = f"https://www.youtube.com/watch?v={videoid}"
     try:
-        result = subprocess.run(['youtube-dl', '--list-formats', video_url], capture_output=True, text=True)
-        print(result.stdout)
-    except Exception as e:
-        print(f"Error: {e}")
+        results = VideosSearch(url, limit=1)
+        for result in (await results.next())["result"]:
+            try:
+                title = result["title"]
+                title = re.sub("\W+", " ", title)
+                title = title.title()
+            except:
+                title = "Unsupported Title"
+            try:
+                duration = result["duration"]
+            except:
+                duration = "Unknown"
+            thumbnail = result["thumbnails"][0]["url"].split("?")[0]
+            try:
+                views = result["viewCount"]["short"]
+            except:
+                views = "Unknown Views"
+            try:
+                channel = result["channel"]["name"]
+            except:
+                channel = "Unknown Channel"
 
-# Usage
-video_url = 'https://www.youtube.com/watch?v=iF6L0mB1bEA'
-get_available_formats(video_url)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(thumbnail) as resp:
+                if resp.status == 200:
+                    f = await aiofiles.open(f"cache/thumb{videoid}.png", mode="wb")
+                    await f.write(await resp.read())
+                    await f.close()
+
+        try:
+            wxyz = await app.get_profile_photos(user_id)
+            wxy = await app.download_media(wxyz[0]['file_id'], file_name=f'{user_id}.jpg')
+        except:
+            hehe = await app.get_profile_photos(app.id)
+            wxy = await app.download_media(hehe[0]['file_id'], file_name=f'{app.id}.jpg')
+        xy = Image.open(wxy)
+        a = Image.new('L', [640, 640], 0)
+        b = ImageDraw.Draw(a)
+        b.pieslice([(0, 0), (640,640)], 0, 360, fill = 255, outline = "white")
+        c = np.array(xy)
+        d = np.array(a)
+        e = np.dstack((c, d))
+        f = Image.fromarray(e)
+        x = f.resize((200, 200))
+
+        youtube = Image.open(f"cache/thumb{videoid}.png")
+        bg = Image.open(f"DAXXMUSIC/assets/anonx.png")
+        image1 = changeImageSize(1280, 720, youtube)
+        image2 = image1.convert("RGBA")
+        background = image2.filter(filter=ImageFilter.BoxBlur(10))
+        enhancer = ImageEnhance.Brightness(background)
+        background = enhancer.enhance(0.6)
+
+        image3 = changeImageSize(1280, 720, bg)
+        image5 = image3.convert("RGBA")
+        Image.alpha_composite(background, image5).save(f"cache/temp{videoid}.png")
+
+        Xcenter = youtube.width / 2
+        Ycenter = youtube.height / 2
+        x1 = Xcenter - 250
+        y1 = Ycenter - 250
+        x2 = Xcenter + 250
+        y2 = Ycenter + 250
+        logo = youtube.crop((x1, y1, x2, y2))
+        logo.thumbnail((520, 520), Image.LANCZOS)
+        logo.save(f"cache/chop{videoid}.png")
+        if not os.path.isfile(f"cache/cropped{videoid}.png"):
+            im = Image.open(f"cache/chop{videoid}.png").convert("RGBA")
+            add_corners(im)
+            im.save(f"cache/cropped{videoid}.png")
+
+        crop_img = Image.open(f"cache/cropped{videoid}.png")
+        logo = crop_img.convert("RGBA")
+        logo.thumbnail((1, 1), Image.LANCZOS)
+        width = int((1280 - 1) / 2)
+        background = Image.open(f"cache/temp{videoid}.png")
+        background.paste(logo, (width + 3, 290), mask=logo)
+        background.paste(x, (1050, 250), mask=x)
+        background.paste(image3, (0, 0), mask=image3)
+
+        draw = ImageDraw.Draw(background)
+        font = ImageFont.truetype("DAXXMUSIC/assets/font2.ttf", 37)
+        ImageFont.truetype("DAXXMUSIC/assets/font2.ttf", 62)
+        arial = ImageFont.truetype("DAXXMUSIC/assets/font2.ttf", 26)
+        ImageFont.truetype("DAXXMUSIC/assets/font.ttf", 26)
+        para = textwrap.wrap(title, width=28)
+        try:
+            draw.text(
+            (55, 560),
+            f"{channel} | {views[:23]}",
+            (255, 255, 255),
+            font=arial,
+            )
+            if para[0]:
+                text_w, text_h = draw.textsize(f"{para[0]}", font=font)
+                draw.text(
+                    ((1280 - 1115) / 3.50, 620),
+                    f"{para[0]} {para[0]}",
+                    fill="white",
+                    stroke_width=1,
+                    stroke_fill="white",
+                    font=font,
+                )
+            if para[1]:
+                text_w, text_h = draw.textsize(f"{para[1]}", font=font)
+                draw.text(
+                    ((1280 - text_w) / 2, 6000),
+                    f"{para[1]}",
+                    fill="white",
+                    stroke_width=1,
+                    stroke_fill="white",
+                    font=font,
+                )
+        except:
+            pass
+        text_w, text_h = draw.textsize(f"Duration: {duration} Mins", font=arial)
+        draw.text(
+            ((1280 - 190) / 1, 685),
+            f"            {duration} ",
+            fill="white",
+            font=arial,
+        )
+
+        try:
+            os.remove(f"cache/thumb{videoid}.png")
+        except:
+            pass
+        file = f"cache/que{videoid}_{user_id}.png"
+        background.save(f"cache/que{videoid}_{user_id}.png")
+        return f"cache/que{videoid}_{user_id}.png"
+    except Exception as e:
+        print(e)
+        return YOUTUBE_IMG_URL
