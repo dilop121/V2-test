@@ -41,7 +41,7 @@ def truncate(text):
     return [text1,text2]
 
 
-async def gen_thumb(videoid, user_id):
+async def get_thumb(videoid, user_id):
     if os.path.isfile(f"cache/{videoid}_{user_id}.jpg"):
         return f"cache/{videoid}_{user_id}.jpg"
     try:
