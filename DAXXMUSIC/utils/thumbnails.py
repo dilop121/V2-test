@@ -168,3 +168,17 @@ async def get_thumb(videoid, user_id):
     except Exception as e:
         print(e)
         return YOUTUBE_IMG_URL
+
+
+import subprocess
+
+def get_available_formats(video_url):
+    try:
+        result = subprocess.run(['youtube-dl', '--list-formats', video_url], capture_output=True, text=True)
+        print(result.stdout)
+    except Exception as e:
+        print(f"Error: {e}")
+
+# Usage
+video_url = 'https://www.youtube.com/watch?v=iF6L0mB1bEA'
+get_available_formats(video_url)
