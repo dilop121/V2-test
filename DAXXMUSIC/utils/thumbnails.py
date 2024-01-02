@@ -1,15 +1,13 @@
 import os
 import re
-
 import aiofiles
 import aiohttp
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from unidecode import unidecode
 from youtubesearchpython.__future__ import VideosSearch
-
+from pytube import YouTube  # Import the YouTube class from the pytube library
 from DAXXMUSIC import app
 from config import YOUTUBE_IMG_URL
-
 
 def changeImageSize(maxWidth, maxHeight, image):
     widthRatio = maxWidth / image.size[0]
@@ -19,7 +17,6 @@ def changeImageSize(maxWidth, maxHeight, image):
     newImage = image.resize((newWidth, newHeight))
     return newImage
 
-
 def clear(text):
     list = text.split(" ")
     title = ""
@@ -28,33 +25,25 @@ def clear(text):
             title += " " + i
     return title.strip()
 
-
 async def get_thumb(videoid):
     if os.path.isfile(f"cache/{videoid}.png"):
         return f"cache/{videoid}.png"
 
     url = f"https://www.youtube.com/watch?v={videoid}"
     try:
+        yt = YouTube(url)  # Create a YouTube object using the video URL
+        title = yt.title  # Get the video title directly from the pytube YouTube object
+        duration = yt.length  # Get the video duration directly from the pytube YouTube object
+
         results = VideosSearch(url, limit=1)
         for result in (await results.next())["result"]:
             try:
-                title = result["title"]
-                title = re.sub("\W+", " ", title)
-                title = title.title()
-            except:
-                title = "Unsupported Title"
-            try:
-                duration = result["duration"]
-            except:
-                duration = "Unknown Mins"
-            thumbnail = result["thumbnails"][0]["url"].split("?")[0]
-            try:
+                thumbnail = result["thumbnails"][0]["url"].split("?")[0]
                 views = result["viewCount"]["short"]
-            except:
-                views = "Unknown Views"
-            try:
                 channel = result["channel"]["name"]
             except:
+                thumbnail = "Unknown Thumbnail"
+                views = "Unknown Views"
                 channel = "Unknown Channel"
 
         async with aiohttp.ClientSession() as session:
