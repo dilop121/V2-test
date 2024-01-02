@@ -1,4 +1,5 @@
 aiofiles
+pytube
 bard
 pornhub-api==0.2.0
 aiohttp==3.9.1
